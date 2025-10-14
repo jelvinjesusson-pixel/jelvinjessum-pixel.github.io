@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - JELVIN POS</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css        ">
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <!-- Register Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed:', err));
+      });
+    }
+  </script>
+  <style>
+    :root {
+      --primary: #4361ee;
+      --secondary: #3f37c9;
+      --success: #4cc9f0;
+      --success-dark: #10b981;
+      --danger: #f72585;
+      --warning: #f8961e;
+      --light: #f8f9fa;
+      --dark: #212529;
+      --gray-100: #f8f9fa;
+      --gray-200: #e9ecef;
+      --gray-300: #dee2e6;
+      --gray-600: #6c757d;
+      --card-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      --border-radius: 16px;
+      --transition: all 0.3s ease;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #f5f7fb;
+      color: var(--dark);
+      line-height: 1.6;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .header {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      padding: 18px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .live-time {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+
+    .user-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logout-btn {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card {
+      background: white;
+      border-radius: var(--border-radius);
+      box-shadow: var(--card-shadow);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .hero {
+      text-align: center;
+      margin: 40px 0;
+    }
+
+    .hero h1 {
+      font-size: 36px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      color: var(--dark);
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: var(--gray-600);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .quick-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 24px;
+      border-radius: var(--border-radius);
+      box-shadow: var(--card-shadow);
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 16px;
+      color: var(--gray-600);
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .value-sales { color: var(--primary); }
+    .value-profit { color: var(--success-dark); }
+    .value-transactions { color: var(--warning); }
+    .low-stock { color: var(--danger); }
+
+    .navigation {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 28px;
+      margin-bottom: 40px;
+    }
+
+    .nav-card {
+      background: white;
+      border-radius: var(--border-radius);
+      padding: 32px;
+      box-shadow: var(--card-shadow);
+      text-align: center;
+      cursor: pointer;
+      transition: var(--transition);
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .nav-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+    }
+
+    .nav-icon {
+      width: 72px;
+      height: 72px;
+      background: rgba(67, 97, 238, 0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 32px;
+      color: var(--primary);
+    }
+
+    .nav-card.sales .nav-icon { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+    .nav-card.inventory .nav-icon { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .nav-card.reports .nav-icon { background: rgba(123, 31, 162, 0.1); color: #7b1fa2; }
+    .nav-card.settings .nav-icon { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+    .nav-card.audit .nav-icon { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+    .nav-card.users .nav-icon { background: rgba(251, 146, 60, 0.1); color: #f97316; }
+
+    .nav-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--dark);
+    }
+
+    .nav-desc {
+      color: var(--gray-600);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .admin-section {
+      background: white;
+      border-radius: var(--border-radius);
+      padding: 28px;
+      box-shadow: var(--card-shadow);
+      text-align: center;
+    }
+
+    .admin-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--dark);
+    }
+
+    .shop-info {
+      background: var(--gray-100);
+      padding: 16px;
+      border-radius: 12px;
+      margin: 16px 0;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .header { padding: 16px; }
+      .container { padding: 0 16px; }
+      .hero h1 { font-size: 28px; }
+      .quick-stats { grid-template-columns: 1fr; }
+      .navigation { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <i class="fas fa-store"></i>
+      <span id="welcomeMessage">Welcome to JELVIN POS</span>
+    </div>
+    <div class="live-time" id="liveTime">Loading...</div>
+    <div class="user-actions">
+      <div class="admin-email" id="adminEmail">admin@shop.com</div>
+      <button class="logout-btn" onclick="logout()">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="hero">
+      <h1 id="shopWelcome">Welcome to Your Shop!</h1>
+      <p>Manage your business with JELVIN POS - the ultimate point of sale system for modern businesses.</p>
+    </div>
+
+    <div class="quick-stats">
+      <div class="stat-card">
+        <div class="stat-label">Today's Sales</div>
+        <div class="stat-value value-sales"><span id="currencySymbol">₵</span><span id="todaySales">0.00</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Low Stock Items</div>
+        <div class="stat-value low-stock" id="lowStockCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Products</div>
+        <div class="stat-value" id="totalProducts">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Transactions</div>
+        <div class="stat-value value-transactions" id="totalTransactions">0</div>
+      </div>
+    </div>
+
+    <div class="navigation" id="navigationContainer">
+      <!-- Navigation will be populated based on user role -->
+    </div>
+
+    <div class="admin-section">
+      <h2 class="admin-title">System Information</h2>
+      <div class="shop-info" id="shopInfo">Loading...</div>
+      <p style="color:var(--gray-600); font-size:14px;">
+        💡 <strong>JELVIN POS v1.0</strong> - Created with ❤️ for businesses worldwide
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // UNIVERSAL SESSION VALIDATION
+    function validateSession() {
+      const currentShopId = sessionStorage.getItem('currentShopId');
+      const currentUserRole = sessionStorage.getItem('currentUserRole');
+      const currentUserEmail = sessionStorage.getItem('currentUserEmail');
+      const currentCurrency = sessionStorage.getItem('currentCurrency');
+      
+      if (!currentShopId || !currentUserRole || !currentUserEmail || !currentCurrency) {
+        alert('Please log in first.');
+        window.location.href = 'index.html';
+        return false;
+      }
+      
+      const shopData = JSON.parse(localStorage.getItem(currentShopId));
+      if (!shopData) {
+        alert('Shop data not found. Please log in again.');
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+        return false;
+      }
+      
+      window.currentShopId = currentShopId;
+      window.currentUserRole = currentUserRole;
+      window.currentUserEmail = currentUserEmail;
+      window.currentCurrency = currentCurrency;
+      window.shopData = shopData;
+      
+      return true;
+    }
+    
+    function saveShopData() {
+      localStorage.setItem(window.currentShopId, JSON.stringify(window.shopData));
+    }
+    
+    function getCurrencySymbol() {
+      return window.currentCurrency || '₵';
+    }
+    
+    function addAuditLog(user, action, itemType, itemName, details) {
+      const auditLog = window.shopData.auditLog || [];
+      
+      auditLog.push({
+        timestamp: new Date().toISOString(),
+        user: user,
+        action: action,
+        itemType: itemType,
+        itemName: itemName,
+        details: details,
+        ipAddress: '127.0.0.1'
+      });
+      
+      window.shopData.auditLog = auditLog;
+      saveShopData();
+    }
+    
+    if (!validateSession()) {
+      throw new Error('Session validation failed');
+    }
+
+    // Live time (Accra)
+    function updateClock() {
+      const now = new Date();
+      const options = { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        timeZone: 'Africa/Accra'
+      };
+      document.getElementById('liveTime').innerText = now.toLocaleString('en-GB', options);
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Load shop info
+    function loadShopInfo() {
+      const shopName = window.shopData.shopName || 'Your Shop';
+      const adminEmail = window.shopData.adminEmail || 'admin@shop.com';
+      const currency = window.shopData.currency || '₵';
+      
+      document.getElementById('welcomeMessage').innerText = `JELVIN POS`;
+      document.getElementById('shopWelcome').innerText = `Welcome to ${shopName}!`;
+      document.getElementById('adminEmail').innerText = adminEmail;
+      document.getElementById('shopInfo').innerText = `Shop: ${shopName} | Currency: ${currency} | Admin: ${adminEmail}`;
+      document.getElementById('currencySymbol').innerText = currency;
+    }
+
+    // Get today's sales
+    function getTodaySales() {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const salesLog = window.shopData.salesLog || [];
+      
+      const todaySales = salesLog
+        .filter(sale => new Date(sale.date) >= today)
+        .reduce((sum, sale) => sum + (sale.totalSales || 0), 0);
+      
+      document.getElementById('todaySales').innerText = todaySales.toFixed(2);
+      document.getElementById('totalTransactions').innerText = salesLog.length;
+    }
+
+    // Check low stock
+    function checkLowStock() {
+      const inventory = window.shopData.inventory || [];
+      
+      const lowStockItems = inventory.filter(item => {
+        const totalUnits = item.unit === 'pcs' ? 
+          item.stock : 
+          (item.stock * (item.packSize || 1));
+        return totalUnits < 5;
+      });
+      
+      document.getElementById('lowStockCount').innerText = lowStockItems.length;
+      document.getElementById('totalProducts').innerText = inventory.length;
+    }
+
+    // Build navigation based on user role
+    function buildNavigation() {
+      const container = document.getElementById('navigationContainer');
+      
+      if (window.currentUserRole === 'admin') {
+        container.innerHTML = `
+          <div class="nav-card sales" onclick="window.location='sales.html'">
+            <div class="nav-icon">
+              <i class="fas fa-cash-register"></i>
+            </div>
+            <h2 class="nav-title">New Sale</h2>
+            <p class="nav-desc">Process customer transactions and accept payments.</p>
+          </div>
+          
+          <div class="nav-card inventory" onclick="window.location='inventory.html'">
+            <div class="nav-icon">
+              <i class="fas fa-boxes"></i>
+            </div>
+            <h2 class="nav-title">Inventory</h2>
+            <p class="nav-desc">Manage products, stock levels, and pricing.</p>
+          </div>
+          
+          <div class="nav-card reports" onclick="window.location='reports.html'">
+            <div class="nav-icon">
+              <i class="fas fa-chart-line"></i>
+            </div>
+            <h2 class="nav-title">Reports</h2>
+            <p class="nav-desc">View sales analytics and business performance.</p>
+          </div>
+          
+          <div class="nav-card settings" onclick="window.location='settings.html'">
+            <div class="nav-icon">
+              <i class="fas fa-cog"></i>
+            </div>
+            <h2 class="nav-title">Settings</h2>
+            <p class="nav-desc">Configure system preferences and user accounts.</p>
+          </div>
+          
+          <div class="nav-card audit" onclick="window.location='audit.html'">
+            <div class="nav-icon">
+              <i class="fas fa-clipboard-list"></i>
+            </div>
+            <h2 class="nav-title">Audit Trail</h2>
+            <p class="nav-desc">Monitor cashier activities and system changes.</p>
+          </div>
+          
+          <div class="nav-card users" onclick="window.location='users.html'">
+            <div class="nav-icon">
+              <i class="fas fa-users"></i>
+            </div>
+            <h2 class="nav-title">User Management</h2>
+            <p class="nav-desc">Add, edit, and manage cashier accounts.</p>
+          </div>
+          
+          <!-- REMINDERS CARD ADDED HERE -->
+          <div class="nav-card" onclick="window.location='reminders.html'">
+            <div class="nav-icon">
+              <i class="fas fa-bell"></i>
+            </div>
+            <h2 class="nav-title">Reminders</h2>
+            <p class="nav-desc">Track payments, tasks, and due dates.</p>
+          </div>
+          
+          <!-- 🔥 LIVE VIEW CARD ADDED HERE -->
+          <div class="nav-card" onclick="window.location='live-view.html'">
+            <div class="nav-icon">
+              <i class="fas fa-eye"></i>
+            </div>
+            <h2 class="nav-title">Live View</h2>
+            <p class="nav-desc">Monitor what cashiers are doing right now.</p>
+          </div>
+        `;
+      } else {
+        // Cashier view - Reports REMOVED
+        container.innerHTML = `
+          <div class="nav-card sales" onclick="window.location='sales.html'">
+            <div class="nav-icon">
+              <i class="fas fa-cash-register"></i>
+            </div>
+            <h2 class="nav-title">New Sale</h2>
+            <p class="nav-desc">Process customer transactions and accept payments.</p>
+          </div>
+          
+          <div class="nav-card inventory" onclick="window.location='inventory.html'">
+            <div class="nav-icon">
+              <i class="fas fa-boxes"></i>
+            </div>
+            <h2 class="nav-title">Inventory</h2>
+            <p class="nav-desc">View products and stock levels.</p>
+          </div>
+        `;
+      }
+    }
+
+    // Logout
+    function logout() {
+      sessionStorage.clear();
+      window.location.href = 'index.html';
+    }
+
+    // Initialize
+    loadShopInfo();
+    getTodaySales();
+    checkLowStock();
+    buildNavigation();
+  </script>
+</body>
+</html>
