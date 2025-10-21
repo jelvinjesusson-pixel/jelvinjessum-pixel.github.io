@@ -3,6 +3,7 @@
   "short_name": "JELVIN POS",
   "description": "Offline Point of Sale for Ghanaian Businesses",
   "start_url": "index.html",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f0f9ff",
   "theme_color": "#2563eb",

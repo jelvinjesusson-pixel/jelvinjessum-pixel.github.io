@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reports - JELVIN POS</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css    ">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
   <!-- Register Service Worker -->
@@ -385,8 +385,78 @@
       .header { padding: 1.25rem 1.5rem; }
       .container { margin: 1.5rem auto; padding: 0 1rem; }
       .page-header h1 { font-size: 2rem; }
-      .summary-value { font-size: 2rem; }
+      .page-header p { font-size: 1rem; }
+      .summary-cards { gap: 1.5rem; }
+      .card { padding: 1.5rem; }
       .btn { font-size: 1rem; padding: 0.75rem 1.5rem; }
+      .import-section {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+
+    /* Search Bar */
+    .search-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .search-input {
+      flex: 1;
+      padding: 0.75rem;
+      border: 2px solid var(--gray-200);
+      border-radius: 0.5rem;
+      font-size: 1rem;
+    }
+    .search-btn {
+      padding: 0.75rem 1.5rem;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .search-btn:hover {
+      background: var(--primary-dark);
+    }
+
+    /* Profit by Product Section */
+    .profit-by-product {
+      background: white;
+      border-radius: 1.5rem;
+      padding: 2rem;
+      box-shadow: var(--card-shadow);
+      margin-top: 2rem;
+    }
+    .profit-by-product h3 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 1rem;
+      border-bottom: 2px solid var(--gray-100);
+      padding-bottom: 0.5rem;
+    }
+    .profit-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+    .profit-item {
+      background: var(--gray-100);
+      padding: 1rem;
+      border-radius: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .profit-item-name {
+      font-weight: 600;
+      color: var(--dark);
+    }
+    .profit-item-value {
+      font-weight: 700;
+      color: var(--success);
     }
   </style>
 </head>
@@ -432,7 +502,7 @@
       </div>
       <div class="summary-card">
         <div class="summary-label">Avg. Sale</div>
-        <div class="summary-value value-average"><span id="currencySymbol">₵</span><span id="averageSale">0.00</span></div>
+        <div class="summary-value value-average"><span id="currencySymbolAvg">₵</span><span id="averageSale">0.00</span></div>
         <div class="summary-trend trend-down">
           <i class="fas fa-arrow-down"></i> -2.1% vs last period
         </div>
@@ -492,6 +562,12 @@
         <h2>Detailed Transactions</h2>
       </div>
       
+      <!-- Search Bar -->
+      <div class="search-bar">
+        <input type="text" id="searchInput" class="search-input" placeholder="Search by Transaction ID, Customer Phone, or Product Name...">
+        <button class="search-btn" onclick="searchInTable()">Search</button>
+      </div>
+
       <div class="table-container">
         <table id="reportTable">
           <thead>
@@ -500,13 +576,22 @@
               <th>Items Sold</th>
               <th>Customer Phone</th>
               <th>Total (₵)</th>
-              <th>Profit (₵)</th>
+              <th>Profit Before Discount (₵)</th>
+              <th>Profit After Discount (₵)</th>
               <th>Payment Method</th>
               <th>Transaction ID</th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Profit by Product Section -->
+    <div class="profit-by-product">
+      <h3>Profit by Product</h3>
+      <div class="profit-list" id="profitByProductList">
+        <!-- Will be populated dynamically -->
       </div>
     </div>
   </div>
@@ -539,11 +624,21 @@
       window.currentCurrency = currentCurrency;
       window.shopData = shopData;
       
+      // 🔒 RESTRICT REPORTS TO ADMIN ONLY
+      if (window.currentUserRole !== 'admin') {
+        window.location.href = 'dashboard.html';
+      }
+      
       return true;
     }
     
     function saveShopData() {
-      localStorage.setItem(window.currentShopId, JSON.stringify(window.shopData));
+      try {
+        localStorage.setItem(window.currentShopId, JSON.stringify(window.shopData));
+      } catch (e) {
+        console.error('Failed to save shop ', e);
+        alert('Failed to save data. Please contact support.');
+      }
     }
     
     function getCurrencySymbol() {
@@ -571,11 +666,6 @@
       throw new Error('Session validation failed');
     }
 
-    // 🔒 RESTRICT REPORTS TO ADMIN ONLY
-    if (window.currentUserRole !== 'admin') {
-      window.location.href = 'dashboard.html';
-    }
-
     // Live time (Accra)
     function updateClock() {
       const now = new Date();
@@ -591,12 +681,11 @@
 
     // Load reports
     function loadReports() {
-      let salesLog = [];
-      try {
-        salesLog = window.shopData.salesLog || [];
-      } catch (e) {
-        console.error("Error loading sales log:", e);
+      // Ensure salesLog exists
+      if (!window.shopData.salesLog) {
+        window.shopData.salesLog = [];
       }
+      let salesLog = window.shopData.salesLog;
 
       const period = document.getElementById('reportPeriod').value;
       const method = document.getElementById('paymentMethod').value;
@@ -626,15 +715,16 @@
       }
 
       let filtered = salesLog.filter(sale => {
+        if (!sale.date) return false; // Skip invalid sales
         const saleDate = new Date(sale.date);
         const matchesPeriod = saleDate >= startDate && saleDate <= endDate;
         const matchesMethod = method === 'all' || sale.paymentMethod === method;
         return matchesPeriod && matchesMethod;
       });
 
-      // Summary calculations
-      const totalSales = filtered.reduce((sum, s) => sum + (s.totalSales || 0), 0);
-      const totalProfit = filtered.reduce((sum, s) => sum + (s.profit || 0), 0);
+      // Summary calculations with fallbacks
+      const totalSales = filtered.reduce((sum, s) => sum + (parseFloat(s.totalSales) || 0), 0);
+      const totalProfit = filtered.reduce((sum, s) => sum + (parseFloat(s.profit) || 0), 0);
       const totalTransactions = filtered.length;
       const averageSale = totalTransactions > 0 ? totalSales / totalTransactions : 0;
 
@@ -642,57 +732,90 @@
       document.getElementById('totalProfit').innerText = totalProfit.toFixed(2);
       document.getElementById('totalTransactions').innerText = totalTransactions;
       document.getElementById('averageSale').innerText = averageSale.toFixed(2);
+      // Fix currency symbols
+      document.getElementById('currencySymbol').innerText = getCurrencySymbol();
+      document.getElementById('currencySymbolAvg').innerText = getCurrencySymbol();
 
       // Table
       const tbody = document.querySelector('#reportTable tbody');
       tbody.innerHTML = '';
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="no-data">No transactions found for the selected filters.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="no-data">No transactions found for the selected filters.</td></tr>`;
+        // Clear profit by product
+        document.getElementById('profitByProductList').innerHTML = '<div class="no-data">No data to show.</div>';
         return;
       }
 
       // Sort by date (newest first)
       filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
+      // Calculate profit by product
+      const productProfit = {};
       filtered.forEach(sale => {
-        const items = sale.items.map(i => `${i.qty}x ${i.name}`).join(', ');
+        if (sale.items) {
+          sale.items.forEach(item => {
+            const productName = item.name;
+            // ✅ FIXED: Use correct property names and calculation
+            const profitPerItem = (item.price - item.cost); // price and cost are already per base unit
+            const totalProfitForItem = profitPerItem * item.qty; // qty is already the final quantity sold
+            if (!productProfit[productName]) {
+              productProfit[productName] = 0;
+            }
+            productProfit[productName] += totalProfitForItem;
+          });
+        }
+      });
+
+      // Populate profit by product section
+      const profitList = document.getElementById('profitByProductList');
+      profitList.innerHTML = '';
+      if (Object.keys(productProfit).length === 0) {
+          profitList.innerHTML = '<div class="no-data">No data to show.</div>';
+      } else {
+          Object.keys(productProfit).forEach(productName => {
+            const profit = productProfit[productName];
+            const div = document.createElement('div');
+            div.className = 'profit-item';
+            div.innerHTML = `
+              <span class="profit-item-name">${escapeHtml(productName)}</span>
+              <span class="profit-item-value">${getCurrencySymbol()}${profit.toFixed(2)}</span>
+            `;
+            profitList.appendChild(div);
+          });
+      }
+
+      // Populate main table
+      filtered.forEach(sale => {
+        // ✅ FIXED: Correctly format items list
+        const items = (sale.items || []).map(i => 
+          `${i.qty || 0}x ${i.name || 'Unknown'}`
+        ).join(', ');
         const customerPhone = sale.customerPhone || '—';
-        const profitClass = (sale.profit || 0) >= 0 ? 'profit-positive' : 'profit-negative';
-        const paymentClass = `payment-${sale.paymentMethod.toLowerCase()}`;
-        const transactionId = `GH${new Date(sale.date).getTime().toString().slice(-6)}`;
+        
+        // ✅ FIXED: Use sale-level profit values
+        const profitBeforeDiscount = (parseFloat(sale.subtotal) || 0) - (parseFloat(sale.totalCost) || 0);
+        const profitAfterDiscount = parseFloat(sale.profit) || 0;
+        const profitClass = profitAfterDiscount >= 0 ? 'profit-positive' : 'profit-negative';
+        
+        const paymentMethod = sale.paymentMethod || 'Unknown';
+        const paymentClass = `payment-${paymentMethod.toLowerCase()}`;
+        
+        // ✅ FIXED: Generate consistent transaction ID
+        const transactionId = `JELVIN${new Date(sale.date).getTime().toString().slice(-6)}`;
 
         const row = document.createElement('tr');
         row.innerHTML = `
           <td>${formatDate(sale.date)}</td>
-          <td>${items}</td>
-          <td>${customerPhone}</td>
-          <td class="${profitClass}">${getCurrencySymbol()}${(sale.totalSales || 0).toFixed(2)}</td>
-          <td class="${profitClass}">${getCurrencySymbol()}${(sale.profit || 0).toFixed(2)}</td>
-          <td class="${paymentClass}">${sale.paymentMethod}</td>
-          <td>${transactionId}</td>
+          <td>${escapeHtml(items)}</td>
+          <td>${escapeHtml(customerPhone)}</td>
+          <td class="${profitClass}">${getCurrencySymbol()}${(parseFloat(sale.totalSales) || 0).toFixed(2)}</td>
+          <td class="${profitClass}">${getCurrencySymbol()}${profitBeforeDiscount.toFixed(2)}</td>
+          <td class="${profitClass}">${getCurrencySymbol()}${profitAfterDiscount.toFixed(2)}</td>
+          <td class="${paymentClass}">${escapeHtml(paymentMethod)}</td>
+          <td>${escapeHtml(transactionId)}</td>
         `;
         tbody.appendChild(row);
-      });
-
-      // Populate user filter dropdown
-      populateUserFilter(salesLog);
-    }
-
-    function populateUserFilter(salesLog) {
-      const userSelect = document.getElementById('auditUser');
-      const users = [...new Set(salesLog.map(record => record.user))];
-      
-      // Clear existing options (except "All Users")
-      while (userSelect.options.length > 1) {
-        userSelect.remove(1);
-      }
-      
-      users.forEach(user => {
-        const option = document.createElement('option');
-        option.value = user;
-        option.textContent = user;
-        userSelect.appendChild(option);
       });
     }
 
@@ -737,9 +860,36 @@
       });
     }
 
+    // ✅ FIXED: Search in table (now works after Apply Filters is clicked)
+    function searchInTable() {
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      const rows = document.querySelectorAll('#reportTable tbody tr');
+      
+      if (rows.length === 0 || rows[0].querySelector('td[colspan]')) {
+          // If table is empty or shows "No data", don't filter
+          return;
+      }
+      
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        let match = false;
+        
+        cells.forEach(cell => {
+          if (cell.textContent.toLowerCase().includes(searchTerm)) {
+            match = true;
+          }
+        });
+        
+        row.style.display = match ? '' : 'none';
+      });
+    }
+
     // Export reports
     function exportReports() {
-      const salesLog = window.shopData.salesLog || [];
+      if (!window.shopData.salesLog) {
+        window.shopData.salesLog = [];
+      }
+      const salesLog = window.shopData.salesLog;
       if (salesLog.length === 0) {
         alert('No sales data to export!');
         return;
@@ -768,6 +918,7 @@
       }
 
       const filtered = salesLog.filter(sale => {
+        if (!sale.date) return false;
         const saleDate = new Date(sale.date);
         const matchesPeriod = saleDate >= startDate && saleDate <= endDate;
         const matchesMethod = method === 'all' || sale.paymentMethod === method;
@@ -781,12 +932,14 @@
       
       const exportData = filtered.map(sale => ({
         Date: new Date(sale.date).toLocaleString('en-GB'),
-        Items: sale.items.map(i => `${i.qty}x ${i.name}`).join('; '),
+        Items: (sale.items || []).map(i => `${i.qty || 0}x ${i.name || 'Unknown'}`).join('; '),
         CustomerPhone: sale.customerPhone || '',
-        Total: sale.totalSales,
-        Profit: sale.profit,
-        Payment: sale.paymentMethod,
-        TransactionID: `GH${new Date(sale.date).getTime().toString().slice(-6)}`
+        // ✅ FIXED: Use correct property names
+        Total: parseFloat(sale.totalSales) || 0,
+        ProfitBeforeDiscount: (parseFloat(sale.subtotal) || 0) - (parseFloat(sale.totalCost) || 0),
+        ProfitAfterDiscount: parseFloat(sale.profit) || 0,
+        Payment: sale.paymentMethod || 'Unknown',
+        TransactionID: `JELVIN${new Date(sale.date).getTime().toString().slice(-6)}` // ✅ FIXED
       }));
       
       const csv = convertToCSV(exportData);
@@ -795,7 +948,7 @@
       const a = document.createElement('a');
       a.setAttribute('hidden', '');
       a.setAttribute('href', url);
-      a.setAttribute('download', 'ghana-pos-sales-report.csv');
+      a.setAttribute('download', 'jelvin-pos-sales-report.csv');
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -815,11 +968,26 @@
         let line = '';
         for (let index in array[i]) {
           if (line !== '') line += ',';
-          line += `"${array[i][index]}"`;
+          // Properly escape and quote fields
+          let value = String(array[i][index]);
+          // Escape double quotes by doubling them
+          value = value.replace(/"/g, '""');
+          // Quote the field if it contains a comma, newline, or double quote
+          if (/[",\n\r]/.test(value)) {
+            value = `"${value}"`;
+          }
+          line += value;
         }
         str += line + '\r\n';
       }
       return str;
+    }
+    
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
 
     // Initialize

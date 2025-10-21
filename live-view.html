@@ -101,7 +101,7 @@
     }
 
     .container {
-      max-width: 1400px;
+      max-width: 1600px;
       margin: 2.5rem auto;
       padding: 0 1.5rem;
     }
@@ -132,6 +132,12 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 2rem;
+    }
+
+    @media (max-width: 1024px) {
+      .live-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .cashier-card {
@@ -213,6 +219,9 @@
       .header { padding: 1.25rem 1.5rem; }
       .container { margin: 1.5rem auto; padding: 0 1rem; }
       .page-header h1 { font-size: 2rem; }
+      .page-header p { font-size: 1rem; }
+      .live-grid { gap: 1.5rem; }
+      .cashier-card { padding: 1.5rem; }
       .btn { font-size: 1rem; padding: 0.75rem 1.5rem; }
     }
   </style>
@@ -237,52 +246,72 @@
 
     <div class="live-grid" id="liveGrid">
       <!-- Live cashier carts will be loaded here -->
-      <div class="no-cashiers">No active cashiers.</div>
+      <div class="no-cashiers">Loading live data...</div>
     </div>
   </div>
 
   <script>
-    // UNIVERSAL SESSION VALIDATION
+    // UNIVERSAL SESSION VALIDATION with improved error handling
     function validateSession() {
       const currentShopId = sessionStorage.getItem('currentShopId');
       const currentUserRole = sessionStorage.getItem('currentUserRole');
       const currentUserEmail = sessionStorage.getItem('currentUserEmail');
       const currentCurrency = sessionStorage.getItem('currentCurrency');
-      
+
       if (!currentShopId || !currentUserRole || !currentUserEmail || !currentCurrency) {
-        alert('Please log in first.');
+        alert('Session expired. Please log in again.');
         window.location.href = 'index.html';
         return false;
       }
-      
-      const shopData = JSON.parse(localStorage.getItem(currentShopId));
+
+      let shopData = null;
+      try {
+        shopData = JSON.parse(localStorage.getItem(currentShopId));
+      } catch (e) {
+        console.error('Failed to parse shop data:', e);
+        alert('Shop data is corrupted. Please log in again.');
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+        return false;
+      }
+
       if (!shopData) {
         alert('Shop data not found. Please log in again.');
         sessionStorage.clear();
         window.location.href = 'index.html';
         return false;
       }
-      
+
       window.currentShopId = currentShopId;
       window.currentUserRole = currentUserRole;
       window.currentUserEmail = currentUserEmail;
       window.currentCurrency = currentCurrency;
       window.shopData = shopData;
-      
+
+      // 🔒 RESTRICT LIVE VIEW TO ADMIN ONLY
+      if (window.currentUserRole !== 'admin') {
+        window.location.href = 'dashboard.html';
+      }
+
       return true;
     }
-    
+
     function saveShopData() {
-      localStorage.setItem(window.currentShopId, JSON.stringify(window.shopData));
+      try {
+        localStorage.setItem(window.currentShopId, JSON.stringify(window.shopData));
+      } catch (e) {
+        console.error('Failed to save shop ', e);
+        alert('Failed to save data. Please contact support.');
+      }
     }
-    
+
     function getCurrencySymbol() {
       return window.currentCurrency || '₵';
     }
-    
+
     function addAuditLog(user, action, itemType, itemName, details) {
       const auditLog = window.shopData.auditLog || [];
-      
+
       auditLog.push({
         timestamp: new Date().toISOString(),
         user: user,
@@ -292,74 +321,106 @@
         details: details,
         ipAddress: '127.0.0.1'
       });
-      
+
       window.shopData.auditLog = auditLog;
       saveShopData();
     }
-    
+
     if (!validateSession()) {
-      throw new Error('Session validation failed');
-    }
-
-    // Live time (Accra)
-    function updateClock() {
-      const now = new Date();
-      const options = { 
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        timeZone: 'Africa/Accra'
-      };
-      document.getElementById('liveTime').innerText = now.toLocaleString('en-GB', options);
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    // Load live cashier carts
-    function loadLiveCarts() {
-      const liveCart = window.shopData.liveCart || {};
-      const container = document.getElementById('liveGrid');
-      
-      container.innerHTML = '';
-      
-      if (Object.keys(liveCart).length === 0) {
-        container.innerHTML = `<div class="no-cashiers">No active cashiers.</div>`;
-        return;
+      document.body.innerHTML = '<div style="text-align:center;padding:50px;font-size:1.5rem;color:red;">Session expired. Redirecting...</div>';
+      setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 2000);
+    } else {
+      // Live time (Accra)
+      function updateClock() {
+        const now = new Date();
+        const options = { 
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          timeZone: 'Africa/Accra'
+        };
+        document.getElementById('liveTime').innerText = now.toLocaleString('en-GB', options);
       }
-      
-      Object.values(liveCart).forEach(cart => {
-        const card = document.createElement('div');
-        card.className = 'cashier-card';
-        
-        const itemsList = cart.items.map(item => `
-          <div class="cart-item">
-            <span class="item-name">${item.qty}x ${item.name}</span>
-            <span class="item-price">${getCurrencySymbol()}${item.price.toFixed(2)}</span>
-          </div>
-        `).join('');
-        
-        card.innerHTML = `
-          <div class="cashier-header">
-            <i class="fas fa-user-tie"></i>
-            <div class="cashier-name">${cart.cashier}</div>
-          </div>
-          <div class="cart-items">
-            ${itemsList}
-          </div>
-          <div class="total-row">
-            <span>Total:</span>
-            <span>${getCurrencySymbol()}${cart.total.toFixed(2)}</span>
-          </div>
-        `;
-        
-        container.appendChild(card);
-      });
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      // ✅ FIXED: Load live carts from localStorage (not shopData)
+      function loadLiveCarts() {
+        const liveCartData = localStorage.getItem('liveCart');
+        let liveCart = {};
+        if (liveCartData) {
+          try {
+            liveCart = JSON.parse(liveCartData);
+          } catch (e) {
+            console.error('Failed to parse live cart data:', e);
+            liveCart = {};
+          }
+        }
+
+        const container = document.getElementById('liveGrid');
+        container.innerHTML = '';
+
+        if (!liveCart || Object.keys(liveCart).length === 0) {
+          container.innerHTML = `<div class="no-cashiers">No active cashiers.</div>`;
+          return;
+        }
+
+        Object.values(liveCart).forEach(cart => {
+          if (!cart.cashier || !cart.items || !Array.isArray(cart.items)) {
+            // Skip invalid cart entries
+            return;
+          }
+
+          const card = document.createElement('div');
+          card.className = 'cashier-card';
+
+          const itemsList = cart.items.map(item => {
+            const price = item.price || 0;
+            const qty = item.qty || 0;
+            const total = price * qty;
+            return `
+              <div class="cart-item">
+                <span class="item-name">${escapeHtml(qty)}x ${escapeHtml(item.name)}</span>
+                <span class="item-price">${getCurrencySymbol()}${total.toFixed(2)}</span>
+              </div>
+            `;
+          }).join('');
+
+          card.innerHTML = `
+            <div class="cashier-header">
+              <i class="fas fa-user-tie cashier-icon"></i>
+              <div class="cashier-name">${escapeHtml(cart.cashier)}</div>
+            </div>
+            <div class="cart-items">
+              ${itemsList || '<div class="no-cashiers">Cart is empty</div>'}
+            </div>
+            <div class="total-row">
+              <span>Total:</span>
+              <span>${getCurrencySymbol()}${(cart.total || 0).toFixed(2)}</span>
+            </div>
+          `;
+
+          container.appendChild(card);
+        });
+
+        // If no valid cards were added
+        if (container.children.length === 0) {
+          container.innerHTML = `<div class="no-cashiers">No active cashiers.</div>`;
+        }
+      }
+
+      // Escape HTML to prevent XSS
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // Refresh every 5 seconds
+      setInterval(loadLiveCarts, 5000);
+      loadLiveCarts(); // Initial load
     }
-
-    // Refresh every 10 seconds
-    setInterval(loadLiveCarts, 10000);
-
-    // Initialize
-    loadLiveCarts();
   </script>
 </body>
 </html>

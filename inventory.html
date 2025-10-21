@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inventory - JELVIN POS</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css    ">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css  ">
   <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
   <!-- Register Service Worker -->
@@ -502,9 +502,10 @@
             <label for="productCost">Cost Price</label>
             <input type="number" id="productCost" class="form-control" placeholder="0.00" step="0.01" min="0">
           </div>
-          <div class="form-group">
-            <label for="productStock">Stock Quantity</label>
-            <input type="number" id="productStock" class="form-control" placeholder="e.g., 50" min="0">
+          <!-- NEW FIELD: How Many -->
+          <div class="form-group" id="howManyGroup">
+            <label for="howMany">How Many</label>
+            <input type="number" id="howMany" class="form-control" placeholder="e.g., 20" min="1">
           </div>
           <div class="form-group">
             <label for="productUnit">Unit</label>
@@ -549,6 +550,7 @@
                 <th>Price</th>
                 <th>Cost</th>
                 <th>Stock</th>
+                <th>Total Items</th> <!-- ✅ NEW COLUMN -->
                 <th>Unit</th>
                 <th>Actions</th>
               </tr>
@@ -644,150 +646,145 @@
 
     // Load inventory
     function loadInventory() {
-      const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
-      let inventory = window.shopData.inventory || [];
-      
-      const filtered = inventory.filter(item => 
-        item.name.toLowerCase().includes(searchTerm)
-      );
+  const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
+  let inventory = window.shopData.inventory || [];
+  
+  const filtered = inventory.filter(item =>
+    item.name.toLowerCase().includes(searchTerm)
+  );
 
-      const tbody = document.querySelector('#inventoryTable tbody');
-      tbody.innerHTML = '';
+  const tbody = document.querySelector('#inventoryTable tbody');
+  tbody.innerHTML = '';
 
-      // Update stats
-      document.getElementById('totalProducts').innerText = inventory.length;
-      document.getElementById('currencySymbol').innerText = getCurrencySymbol();
-      
-      const lowStockItems = inventory.filter(item => {
-        const totalUnits = item.unit === 'pcs' ? item.stock : (item.stock * (item.packSize || 1));
-        return totalUnits < 5;
-      });
-      document.getElementById('lowStockCount').innerText = lowStockItems.length;
-      
-      const totalValue = inventory.reduce((sum, item) => {
-        const totalUnits = item.unit === 'pcs' ? item.stock : (item.stock * (item.packSize || 1));
-        return sum + (totalUnits * item.costPrice);
-      }, 0);
-      document.getElementById('totalValue').innerText = totalValue.toFixed(2);
+  // Update stats
+  document.getElementById('totalProducts').innerText = inventory.length;
+  document.getElementById('currencySymbol').innerText = getCurrencySymbol();
+  
+  // Low stock based on actual stock (units/packs)
+  const lowStockItems = inventory.filter(item => item.stock < 5);
+  document.getElementById('lowStockCount').innerText = lowStockItems.length;
+  
+  // Total value = sum(stock * costPrice)
+  const totalValue = inventory.reduce((sum, item) => {
+    return sum + (item.stock * item.costPrice);
+  }, 0);
+  document.getElementById('totalValue').innerText = totalValue.toFixed(2);
 
-      if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="no-data">No products found. Add your first product!</td></tr>`;
-        return;
-      }
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="no-results">No products found. Add your first product!</td></tr>`;
+    return;
+  }
 
-      filtered.forEach((item, index) => {
-        const totalUnits = item.unit === 'pcs' ? 
-          item.stock : 
-          (item.stock * (item.packSize || 1));
-        const isLow = totalUnits < 5;
-        const stockDisplay = item.unit === 'pcs' ? `${item.stock} pcs` : `${item.stock} ${item.unit}`;
+  filtered.forEach((item, index) => {
+    const isLow = item.stock < 5;
+    const stockDisplay = item.unit === 'pcs' ? `${item.stock} pcs` : `${item.stock} ${item.unit}`;
+    // ✅ Calculate total individual items
+    const totalItems = item.packSize ? (item.stock * item.packSize) : item.stock;
+    // ✅ Calculate loose items and packs sold
+    const packsSold = Math.floor(item.stock / (item.packSize || 1));
+    const looseItems = item.stock % (item.packSize || 1);
 
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>
-            <div class="product-name">${item.name}</div>
-            <div class="product-details">
-              <span class="product-price">${getCurrencySymbol()}${item.price.toFixed(2)}</span>
-              <span class="product-stock">${stockDisplay}</span>
-            </div>
-          </td>
-          <td>${getCurrencySymbol()}${item.price.toFixed(2)}</td>
-          <td>${getCurrencySymbol()}${item.costPrice.toFixed(2)}</td>
-          <td class="${isLow ? 'stock-low' : ''}">
-            ${isLow ? '<i class="fas fa-exclamation-triangle"></i> ' : ''}
-            ${stockDisplay}
-          </td>
-          <td>${item.unit}</td>
-          <td class="actions">
-            ${window.currentUserRole === 'admin' ? `
-              <button class="action-btn edit-btn" onclick="editProduct(${index})">
-                <i class="fas fa-edit"></i> Edit
-              </button>
-              <button class="action-btn delete-btn" onclick="deleteProduct(${index})">
-                <i class="fas fa-trash"></i> Delete
-              </button>
-            ` : `
-              <span style="color: var(--gray-600); font-style: italic;">View Only</span>
-            `}
-          </td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>
+        <div class="product-name">${item.name}</div>
+        <div class="product-details">
+          <span class="product-price">${getCurrencySymbol()}${item.price.toFixed(2)}</span>
+          <span class="product-stock">${stockDisplay}</span>
+        </div>
+      </td>
+      <td>${getCurrencySymbol()}${item.price.toFixed(2)}</td>
+      <td>${getCurrencySymbol()}${item.costPrice.toFixed(2)}</td>
+      <td class="${isLow ? 'stock-low' : ''}">
+        ${isLow ? '<i class="fas fa-exclamation-triangle"></i> ' : ''}
+        ${stockDisplay}
+      </td>
+      <td>${totalItems}</td> <!-- ✅ NEW CELL -->
+      <td>${item.unit}</td>
+      <td>${looseItems} loose</td> <!-- ✅ NEW CELL for loose items -->
+      <td class="actions">
+        ${window.currentUserRole === 'admin' ? `
+          <button class="action-btn edit-btn" onclick="editProduct(${index})">
+            <i class="fas fa-edit"></i> Edit
+          </button>
+          <button class="action-btn delete-btn" onclick="deleteProduct(${index})">
+            <i class="fas fa-trash"></i> Delete
+          </button>
+        ` : `
+          <span style="color: var(--gray-600); font-style: italic;">View Only</span>
+        `}
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+}
 
     // Filter inventory
     function filterInventory() {
       loadInventory();
     }
 
-    // Add product (Admin only)
+    // Add product (Admin only) — ✅ FIXED TO SAVE TOTAL ITEMS
     async function addProduct() {
-      // Only admins can add products
-      if (window.currentUserRole !== 'admin') {
-        alert('Only admin can add products!');
-        return;
-      }
-      
-      const name = document.getElementById('productName').value.trim();
-      const price = parseFloat(document.getElementById('productPrice').value);
-      const cost = parseFloat(document.getElementById('productCost').value);
-      const stock = parseInt(document.getElementById('productStock').value);
-      const unit = document.getElementById('productUnit').value;
-      const packSize = unit === 'pack' || unit === 'dozen' || unit === 'bag' || unit === 'carton' ? 
-        parseInt(document.getElementById('packSize').value) : null;
+  if (window.currentUserRole !== 'admin') {
+    alert('Only admin can add products!');
+    return;
+  }
+  
+  const name = document.getElementById('productName').value.trim();
+  const price = parseFloat(document.getElementById('productPrice').value);
+  const cost = parseFloat(document.getElementById('productCost').value);
+  const unit = document.getElementById('productUnit').value;
+  const howMany = parseInt(document.getElementById('howMany').value);
+  const packSizeInput = document.getElementById('packSize').value;
 
-      if (!name) { alert('Product name is required!'); return; }
-      if (isNaN(price) || price <= 0) { alert('Valid price is required!'); return; }
-      if (isNaN(cost) || cost <= 0) { alert('Valid cost price is required!'); return; }
-      if (isNaN(stock) || stock < 0) { alert('Valid stock quantity is required!'); return; }
-      if (packSize && (isNaN(packSize) || packSize <= 0)) { alert('Valid pack size is required!'); return; }
+  if (!name) { alert('Product name is required!'); return; }
+  if (isNaN(price) || price <= 0) { alert('Valid price is required!'); return; }
+  if (isNaN(cost) || cost <= 0) { alert('Valid cost price is required!'); return; }
+  if (isNaN(howMany) || howMany <= 0) { alert('Valid "How Many" is required!'); return; }
 
-      let inventory = window.shopData.inventory || [];
-      
-      // Check for duplicate
-      const exists = inventory.find(p => p.name === name && p.unit === unit);
-      if (exists) {
-        alert('Product with this name and unit already exists!');
-        return;
-      }
+  let stock, packSize = null;
 
-      inventory.push({
-        name,
-        price,
-        costPrice: cost,
-        stock,
-        unit,
-        packSize: packSize || undefined
-      });
+  if (['pack', 'dozen', 'bag', 'carton'].includes(unit)) {
+    packSize = parseInt(packSizeInput) || 1;
+    stock = howMany * packSize; // ✅ Save total individual items
+  } else {
+    stock = howMany; // ✅ For pcs, bottle, etc.
+  }
 
-      window.shopData.inventory = inventory;
-      saveShopData();
-      alert('✅ Product added successfully!');
-      
-      // Clear form
-      document.getElementById('productName').value = '';
-      document.getElementById('productPrice').value = '';
-      document.getElementById('productCost').value = '';
-      document.getElementById('productStock').value = '';
-      document.getElementById('packSize').value = '';
-      
-      loadInventory();
-      
-      // Add to audit log
-      addAuditLog(window.currentUserEmail, 'add', 'Product', name, `Price: ${price}, Stock: ${stock}`);
-    }
+  let inventory = window.shopData.inventory || [];
+  
+  const exists = inventory.find(p => p.name === name && p.unit === unit);
+  if (exists) {
+    alert('Product with this name and unit already exists!');
+    return;
+  }
 
-    // Set product filter
-    document.getElementById('productUnit').addEventListener('change', function() {
-      const packGroup = document.getElementById('packSizeGroup');
-      if (['pack', 'dozen', 'bag', 'carton'].includes(this.value)) {
-        packGroup.style.display = 'block';
-      } else {
-        packGroup.style.display = 'none';
-      }
-    });
+  inventory.push({
+    name,
+    price,
+    costPrice: cost,
+    stock,        // ✅ Now stores total individual items
+    unit,
+    packSize      // Only for pack/dozen
+  });
 
-    // Edit product (Admin only)
+  window.shopData.inventory = inventory;
+  saveShopData();
+  alert('✅ Product added successfully!');
+  
+  document.getElementById('productName').value = '';
+  document.getElementById('productPrice').value = '';
+  document.getElementById('productCost').value = '';
+  document.getElementById('howMany').value = '';
+  document.getElementById('packSize').value = '';
+  
+  loadInventory();
+  
+  addAuditLog(window.currentUserEmail, 'add', 'Product', name, `Price: ${price}, Total Items: ${stock}`);
+}
+
+    // Edit product — ✅ FIXED TO SHOW PACKS, SAVE TOTAL ITEMS
     function editProduct(index) {
       if (window.currentUserRole !== 'admin') {
         alert('Only admin can edit products!');
@@ -800,27 +797,29 @@
       document.getElementById('productName').value = item.name;
       document.getElementById('productPrice').value = item.price;
       document.getElementById('productCost').value = item.costPrice;
-      document.getElementById('productStock').value = item.stock;
       document.getElementById('productUnit').value = item.unit;
       
       if (['pack', 'dozen', 'bag', 'carton'].includes(item.unit)) {
         document.getElementById('packSizeGroup').style.display = 'block';
         document.getElementById('packSize').value = item.packSize || 1;
+        document.getElementById('howManyGroup').style.display = 'block';
+        // ✅ Show number of packs (not total items)
+        const packs = Math.ceil(item.stock / (item.packSize || 1));
+        document.getElementById('howMany').value = packs;
       } else {
         document.getElementById('packSizeGroup').style.display = 'none';
+        document.getElementById('howManyGroup').style.display = 'block';
+        document.getElementById('howMany').value = item.stock; // ✅ For pcs
       }
       
-      // Remove old item
       inventory.splice(index, 1);
       window.shopData.inventory = inventory;
       saveShopData();
       loadInventory();
       
-      // Add to audit log
       addAuditLog(window.currentUserEmail, 'edit', 'Product', item.name, 'Product details updated');
     }
 
-    // Delete product (Admin only)
     function deleteProduct(index) {
       if (window.currentUserRole !== 'admin') {
         alert('Only admin can delete products!');
@@ -836,11 +835,9 @@
       saveShopData();
       loadInventory();
       
-      // Add to audit log
       addAuditLog(window.currentUserEmail, 'delete', 'Product', deletedItem.name, 'Product deleted from inventory');
     }
 
-    // Export inventory
     function exportInventory() {
       const inventory = window.shopData.inventory || [];
       if (inventory.length === 0) {
@@ -869,7 +866,6 @@
       document.body.removeChild(a);
     }
 
-    // Import inventory from CSV
     function importInventory() {
       if (window.currentUserRole !== 'admin') {
         alert('Only admin can import inventory!');
@@ -905,7 +901,6 @@
             let errors = [];
             
             products.forEach((product, index) => {
-              // Validate required fields
               if (!product.Name || !product.Price || !product.Cost || !product.Stock || !product.Unit) {
                 errors.push(`Row ${index + 2}: Missing required fields`);
                 return;
@@ -920,14 +915,12 @@
                 return;
               }
               
-              // Check for duplicate
               const exists = inventory.find(p => p.name === product.Name && p.unit === product.Unit);
               if (exists) {
                 skipped++;
                 return;
               }
               
-              // Parse packSize if exists
               let packSize = null;
               if (product.PackSize && product.Unit !== 'pcs') {
                 packSize = parseInt(product.PackSize);
@@ -937,7 +930,6 @@
                 }
               }
               
-              // Add product
               inventory.push({
                 name: product.Name,
                 price: price,
@@ -970,7 +962,6 @@
       input.click();
     }
 
-    // Parse CSV string to array of objects
     function parseCSV(csv) {
       const lines = csv.split('\n').filter(line => line.trim() !== '');
       if (lines.length < 2) return [];
@@ -982,7 +973,6 @@
         const line = lines[i].trim();
         if (line === '') continue;
         
-        // Handle quoted fields with commas
         const values = [];
         let current = '';
         let inQuotes = false;
@@ -1012,16 +1002,13 @@
       return products;
     }
 
-    // Convert to CSV
     function convertToCSV(objArray) {
       const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
       let str = '';
 
-      // Headers
       const headers = Object.keys(array[0]);
       str += headers.join(',') + '\r\n';
 
-      // Data
       for (let i = 0; i < array.length; i++) {
         let line = '';
         for (let index in array[i]) {
@@ -1033,12 +1020,9 @@
       return str;
     }
 
-    // Initialize
     loadInventory();
     
-    // Apply cashier view if needed
     if (window.currentUserRole === 'cashier') {
-      // Hide add product section and import button for cashiers
       document.querySelector('.add-product-section').style.display = 'none';
       document.getElementById('importExportSection').innerHTML = `
         <button class="btn btn-primary" style="background: linear-gradient(135deg, var(--accent), #d97706);" onclick="exportInventory()">

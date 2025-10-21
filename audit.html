@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Audit Trail - JELVIN POS</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css  ">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
   <!-- Register Service Worker -->
@@ -165,9 +165,11 @@
     }
 
     .filter-group label {
+      display: block;
+      margin-bottom: 0.5rem;
       font-weight: 600;
       color: var(--dark);
-      font-size: 1rem;
+      font-size: 0.95rem;
     }
 
     .filter-control {
@@ -302,6 +304,9 @@
       .header { padding: 1.25rem 1.5rem; }
       .container { margin: 1.5rem auto; padding: 0 1rem; }
       .page-header h1 { font-size: 2rem; }
+      .page-header p { font-size: 1rem; }
+      .filters-grid { grid-template-columns: 1fr; }
+      .apply-filters { flex-direction: column; align-items: center; }
       .btn { font-size: 1rem; padding: 0.75rem 1.5rem; }
     }
   </style>
@@ -395,7 +400,7 @@
   </div>
 
   <script>
-    // UNIVERSAL SESSION VALIDATION
+    // UNIVERSAL SESSION VALIDATION with improved error handling
     function validateSession() {
       const currentShopId = sessionStorage.getItem('currentShopId');
       const currentUserRole = sessionStorage.getItem('currentUserRole');
@@ -408,7 +413,17 @@
         return false;
       }
       
-      const shopData = JSON.parse(localStorage.getItem(currentShopId));
+      let shopData = null;
+      try {
+        shopData = JSON.parse(localStorage.getItem(currentShopId));
+      } catch (e) {
+        console.error('Failed to parse shop data:', e);
+        alert('Shop data is corrupted. Please log in again.');
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+        return false;
+      }
+      
       if (!shopData) {
         alert('Shop data not found. Please log in again.');
         sessionStorage.clear();
@@ -422,11 +437,21 @@
       window.currentCurrency = currentCurrency;
       window.shopData = shopData;
       
+      // 🔒 RESTRICT AUDIT TRAIL TO ADMIN ONLY
+      if (window.currentUserRole !== 'admin') {
+        window.location.href = 'dashboard.html';
+      }
+      
       return true;
     }
     
     function saveShopData() {
-      localStorage.setItem(window.currentShopId, JSON.stringify(window.shopData));
+      try {
+        localStorage.setItem(window.currentShopId, JSON.stringify(window.shopData));
+      } catch (e) {
+        console.error('Failed to save shop data:', e);
+        alert('Failed to save data. Please contact support.');
+      }
     }
     
     function getCurrencySymbol() {
@@ -447,201 +472,210 @@
       });
       
       window.shopData.auditLog = auditLog;
-      saveShopData();
+      saveShopData(); // ✅ FIXED: Actually save the updated log
     }
     
     if (!validateSession()) {
-      throw new Error('Session validation failed');
-    }
+      document.body.innerHTML = '<div style="text-align:center;padding:50px;font-size:1.5rem;color:red;">Session expired. Redirecting...</div>';
+      setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 2000);
+    } else {
+      // Initialize data AFTER validation
+      let auditLog = window.shopData.auditLog || [];
+      window.shopData.auditLog = auditLog; // Ensure it exists
 
-    // Live time (Accra)
-    function updateClock() {
-      const now = new Date();
-      const options = { 
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        timeZone: 'Africa/Accra'
-      };
-      document.getElementById('liveTime').innerText = now.toLocaleString('en-GB', options);
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    // Load audit log
-    function loadAuditLog() {
-      let auditLog = [];
-      try {
-        auditLog = window.shopData.auditLog || [];
-      } catch (e) {
-        console.error("Error loading audit log:", e);
+      // Live time (Accra)
+      function updateClock() {
+        const now = new Date();
+        const options = { 
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          timeZone: 'Africa/Accra'
+        };
+        document.getElementById('liveTime').innerText = now.toLocaleString('en-GB', options);
       }
+      setInterval(updateClock, 1000);
+      updateClock();
 
-      const period = document.getElementById('auditPeriod').value;
-      const user = document.getElementById('auditUser').value;
-      const action = document.getElementById('auditAction').value;
-      const now = new Date();
+      // Load audit log
+      function loadAuditLog() {
+        let auditLog = window.shopData.auditLog || [];
+        const period = document.getElementById('auditPeriod').value;
+        const user = document.getElementById('auditUser').value;
+        const action = document.getElementById('auditAction').value;
+        const now = new Date();
 
-      let startDate = new Date(0); // All time
-      let endDate = new Date();
+        let startDate = new Date(0); // All time
+        let endDate = new Date();
 
-      if (period === 'today') {
-        startDate = getStartOfDay(now);
-      } else if (period === 'week') {
-        startDate = getStartOfWeek(now);
-      } else if (period === 'month') {
-        startDate = getStartOfMonth(now);
-      } else if (period === 'quarter') {
-        startDate = getStartOfQuarter(now);
-      } else if (period === 'year') {
-        startDate = getStartOfYear(now);
-      }
-
-      let filtered = auditLog.filter(record => {
-        const recordDate = new Date(record.timestamp);
-        const matchesPeriod = recordDate >= startDate && recordDate <= endDate;
-        const matchesUser = user === 'all' || record.user === user;
-        const matchesAction = action === 'all' || record.action === action;
-        return matchesPeriod && matchesUser && matchesAction;
-      });
-
-      // Sort by date (newest first)
-      filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-      const tbody = document.querySelector('#auditTable tbody');
-      tbody.innerHTML = '';
-
-      if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="no-data">No audit records found.</td></tr>`;
-        return;
-      }
-
-      filtered.forEach(record => {
-        const row = document.createElement('tr');
-        const formattedDate = new Date(record.timestamp).toLocaleString('en-GB', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-        
-        const actionClass = `action-${record.action}`;
-        const formattedAction = record.action.charAt(0).toUpperCase() + record.action.slice(1);
-        
-        row.innerHTML = `
-          <td>${formattedDate}</td>
-          <td>${record.user}</td>
-          <td class="${actionClass}">${formattedAction}</td>
-          <td>${record.itemType}: ${record.itemName}</td>
-          <td>${record.details}</td>
-          <td>${record.ipAddress || 'Local'}</td>
-        `;
-        tbody.appendChild(row);
-      });
-
-      // Populate user filter dropdown
-      populateUserFilter(auditLog);
-    }
-
-    function populateUserFilter(auditLog) {
-      const userSelect = document.getElementById('auditUser');
-      const users = [...new Set(auditLog.map(record => record.user))];
-      
-      // Clear existing options (except "All Users")
-      while (userSelect.options.length > 1) {
-        userSelect.remove(1);
-      }
-      
-      users.forEach(user => {
-        const option = document.createElement('option');
-        option.value = user;
-        option.textContent = user;
-        userSelect.appendChild(option);
-      });
-    }
-
-    // Date helpers
-    function getStartOfDay(date) {
-      const d = new Date(date);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    }
-
-    function getStartOfWeek(date) {
-      const d = new Date(date);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      return getStartOfDay(new Date(d.setDate(diff)));
-    }
-
-    function getStartOfMonth(date) {
-      const d = new Date(date);
-      return getStartOfDay(new Date(d.getFullYear(), d.getMonth(), 1));
-    }
-
-    function getStartOfQuarter(date) {
-      const d = new Date(date);
-      const quarter = Math.floor(d.getMonth() / 3);
-      return getStartOfDay(new Date(d.getFullYear(), quarter * 3, 1));
-    }
-
-    function getStartOfYear(date) {
-      const d = new Date(date);
-      return getStartOfDay(new Date(d.getFullYear(), 0, 1));
-    }
-
-    // Export audit log
-    function exportAuditLog() {
-      const auditLog = window.shopData.auditLog || [];
-      if (auditLog.length === 0) {
-        alert('No audit data to export!');
-        return;
-      }
-      
-      const exportData = auditLog.map(record => ({
-        Date: new Date(record.timestamp).toLocaleString('en-GB'),
-        User: record.user,
-        Action: record.action,
-        Item: `${record.itemType}: ${record.itemName}`,
-        Details: record.details,
-        IPAddress: record.ipAddress || 'Local'
-      }));
-      
-      const csv = convertToCSV(exportData);
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.setAttribute('hidden', '');
-      a.setAttribute('href', url);
-      a.setAttribute('download', 'jelvin-pos-audit-log.csv');
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-
-    // Convert to CSV
-    function convertToCSV(objArray) {
-      const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
-      let str = '';
-
-      // Headers
-      const headers = Object.keys(array[0]);
-      str += headers.join(',') + '\r\n';
-
-      // Data
-      for (let i = 0; i < array.length; i++) {
-        let line = '';
-        for (let index in array[i]) {
-          if (line !== '') line += ',';
-          line += `"${array[i][index]}"`;
+        if (period === 'today') {
+          startDate = getStartOfDay(now);
+        } else if (period === 'week') {
+          startDate = getStartOfWeek(now);
+        } else if (period === 'month') {
+          startDate = getStartOfMonth(now);
+        } else if (period === 'quarter') {
+          startDate = getStartOfQuarter(now);
+        } else if (period === 'year') {
+          startDate = getStartOfYear(now);
         }
-        str += line + '\r\n';
-      }
-      return str;
-    }
 
-    // Initialize
-    loadAuditLog();
+        let filtered = auditLog.filter(record => {
+          const recordDate = new Date(record.timestamp);
+          const matchesPeriod = recordDate >= startDate && recordDate <= endDate;
+          const matchesUser = user === 'all' || record.user === user;
+          const matchesAction = action === 'all' || record.action === action;
+          return matchesPeriod && matchesUser && matchesAction;
+        });
+
+        // Sort by date (newest first)
+        filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        const tbody = document.querySelector('#auditTable tbody');
+        tbody.innerHTML = '';
+
+        if (filtered.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" class="no-data">No audit records found.</td></tr>`;
+          return;
+        }
+
+        filtered.forEach(record => {
+          const formattedDate = new Date(record.timestamp).toLocaleString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          
+          const actionClass = `action-${record.action}`;
+          const formattedAction = record.action.charAt(0).toUpperCase() + record.action.slice(1);
+          
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${formattedDate}</td>
+            <td>${record.user}</td>
+            <td class="${actionClass}">${formattedAction}</td>
+            <td>${record.itemType}: ${record.itemName}</td>
+            <td>${record.details}</td>
+            <td>${record.ipAddress || 'Local'}</td>
+          `;
+          tbody.appendChild(row);
+        });
+
+        // Populate user filter dropdown
+        populateUserFilter(auditLog);
+      }
+
+      function populateUserFilter(auditLog) {
+        const userSelect = document.getElementById('auditUser');
+        const users = [...new Set(auditLog.map(record => record.user))];
+        
+        // Clear existing options (except "All Users")
+        while (userSelect.options.length > 1) {
+          userSelect.remove(1);
+        }
+        
+        users.forEach(user => {
+          const option = document.createElement('option');
+          option.value = user;
+          option.textContent = user;
+          userSelect.appendChild(option);
+        });
+      }
+
+      // Date helpers
+      function getStartOfDay(date) {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
+
+      function getStartOfWeek(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return getStartOfDay(new Date(d.setDate(diff)));
+      }
+
+      function getStartOfMonth(date) {
+        const d = new Date(date);
+        return getStartOfDay(new Date(d.getFullYear(), d.getMonth(), 1));
+      }
+
+      function getStartOfQuarter(date) {
+        const d = new Date(date);
+        const quarter = Math.floor(d.getMonth() / 3);
+        return getStartOfDay(new Date(d.getFullYear(), quarter * 3, 1));
+      }
+
+      function getStartOfYear(date) {
+        const d = new Date(date);
+        return getStartOfDay(new Date(d.getFullYear(), 0, 1));
+      }
+
+      // Export audit log
+      function exportAuditLog() {
+        const auditLog = window.shopData.auditLog || [];
+        if (auditLog.length === 0) {
+          alert('No audit data to export!');
+          return;
+        }
+        
+        const exportData = auditLog.map(record => ({
+          Date: new Date(record.timestamp).toLocaleString('en-GB'),
+          User: record.user,
+          Action: record.action,
+          Item: `${record.itemType}: ${record.itemName}`,
+          Details: record.details,
+          IPAddress: record.ipAddress || 'Local'
+        }));
+        
+        const csv = convertToCSV(exportData);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.setAttribute('hidden', '');
+        a.setAttribute('href', url);
+        a.setAttribute('download', 'jelvin-pos-audit-log.csv');
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      // Convert to CSV
+      function convertToCSV(objArray) {
+        const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
+        let str = '';
+
+        // Headers
+        const headers = Object.keys(array[0]);
+        str += headers.join(',') + '\r\n';
+
+        // Data
+        for (let i = 0; i < array.length; i++) {
+          let line = '';
+          for (let index in array[i]) {
+            if (line !== '') line += ',';
+            // Properly escape and quote fields
+            let value = String(array[i][index]);
+            // Escape double quotes by doubling them
+            value = value.replace(/"/g, '""');
+            // Quote the field if it contains a comma, newline, or double quote
+            if (/[",\n\r]/.test(value)) {
+              value = `"${value}"`;
+            }
+            line += value;
+          }
+          str += line + '\r\n';
+        }
+        return str;
+      }
+
+      // Initialize
+      loadAuditLog();
+    }
   </script>
 </body>
 </html>

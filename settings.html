@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Settings - JELVIN POS</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css      ">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json">
   <!-- Register Service Worker -->
@@ -182,7 +182,7 @@
 
     .form-grid {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 1.5rem;
       margin-bottom: 2rem;
     }
@@ -325,7 +325,14 @@
       .live-time { font-size: 1rem; }
       .container { margin: 1.5rem auto; padding: 0 1rem; }
       .page-header h1 { font-size: 2rem; }
+      .page-header p { font-size: 1rem; }
+      .settings-grid { gap: 1.5rem; }
+      .card { padding: 1.5rem; }
       .btn { font-size: 1rem; padding: 0.75rem 1.5rem; }
+      .data-management {
+        flex-direction: column;
+        align-items: center;
+      }
     }
   </style>
 </head>
@@ -516,7 +523,7 @@
   </div>
 
   <script>
-    // UNIVERSAL SESSION VALIDATION
+    // UNIVERSAL SESSION VALIDATION with improved error handling
     function validateSession() {
       const currentShopId = sessionStorage.getItem('currentShopId');
       const currentUserRole = sessionStorage.getItem('currentUserRole');
@@ -529,7 +536,17 @@
         return false;
       }
       
-      const shopData = JSON.parse(localStorage.getItem(currentShopId));
+      let shopData = null;
+      try {
+        shopData = JSON.parse(localStorage.getItem(currentShopId));
+      } catch (e) {
+        console.error('Failed to parse shop data:', e);
+        alert('Shop data is corrupted. Please log in again.');
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+        return false;
+      }
+      
       if (!shopData) {
         alert('Shop data not found. Please log in again.');
         sessionStorage.clear();
@@ -547,7 +564,12 @@
     }
     
     function saveShopData() {
-      localStorage.setItem(window.currentShopId, JSON.stringify(window.shopData));
+      try {
+        localStorage.setItem(window.currentShopId, JSON.stringify(window.shopData));
+      } catch (e) {
+        console.error('Failed to save shop data:', e);
+        alert('Failed to save data. Please contact support.');
+      }
     }
     
     function getCurrencySymbol() {
@@ -571,117 +593,11 @@
       saveShopData();
     }
     
-    if (!validateSession()) {
-      throw new Error('Session validation failed');
-    }
-
-    // Live time (Accra)
-    function updateClock() {
-      const now = new Date();
-      const options = { 
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-        timeZone: 'Africa/Accra'
-      };
-      document.getElementById('liveTime').innerText = now.toLocaleString('en-GB', options);
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    // Load settings
-    function loadSettings() {
-      document.getElementById('shopName').value = window.shopData.shopName || '';
-      document.getElementById('adminEmail').value = window.shopData.adminEmail || '';
-      document.getElementById('momoNumber').value = window.shopData.momoNumber || '';
-      document.getElementById('currencySymbol').value = window.shopData.currency || '₵';
-      
-      // Load payment settings
-      const enableCash = window.shopData.enableCash !== 'false';
-      const enableMoMo = window.shopData.enableMoMo !== 'false';
-      const enableCard = window.shopData.enableCard !== 'false';
-      const defaultPayment = window.shopData.defaultPayment || 'Cash';
-      
-      document.getElementById('enableCash').checked = enableCash;
-      document.getElementById('enableMoMo').checked = enableMoMo;
-      document.getElementById('enableCard').checked = enableCard;
-      document.getElementById('defaultPayment').value = defaultPayment;
-      
-      // Load customer phone requirement setting
-      const requirePhone = window.shopData.requireCustomerPhone === 'true';
-      document.getElementById('requireCustomerPhone').checked = requirePhone;
-    }
-
-    // Save settings
-    function saveSettings() {
-      const shopName = document.getElementById('shopName').value.trim();
-      const momoNumber = document.getElementById('momoNumber').value.trim();
-      const currency = document.getElementById('currencySymbol').value;
-      
-      if (!shopName) {
-        alert('Shop name is required!');
-        return;
-      }
-      
-      // Validate MoMo number (Ghana format)
-      if (momoNumber && !/^0(24|20|54|55|59|26|27|56|57)\d{7}$/.test(momoNumber)) {
-        alert('Please enter a valid Ghana MoMo number (e.g., 0241234567)');
-        return;
-      }
-      
-      window.shopData.shopName = shopName;
-      window.shopData.momoNumber = momoNumber;
-      window.shopData.currency = currency;
-      saveShopData();
-      
-      alert('✅ Settings saved successfully!');
-    }
-
-    // Change password
-    async function changePassword() {
-      const currentPassword = document.getElementById('currentPassword').value;
-      const newPassword = document.getElementById('newPassword').value;
-      const confirmPassword = document.getElementById('confirmPassword').value;
-      
-      if (!currentPassword || !newPassword || !confirmPassword) {
-        alert('All password fields are required!');
-        return;
-      }
-      
-      if (newPassword.length < 8) {
-        alert('New password must be at least 8 characters!');
-        return;
-      }
-      
-      if (newPassword !== confirmPassword) {
-        alert('New passwords do not match!');
-        return;
-      }
-      
-      try {
-        // Verify current password
-        const adminPassword = window.shopData.adminPassword;
-        const currentHash = await hashPassword(currentPassword);
-        
-        if (currentHash !== adminPassword) {
-          alert('Current password is incorrect!');
-          return;
-        }
-        
-        // Hash new password
-        const newHash = await hashPassword(newPassword);
-        window.shopData.adminPassword = newHash;
-        saveShopData();
-        
-        // Clear password fields
-        document.getElementById('currentPassword').value = '';
-        document.getElementById('newPassword').value = '';
-        document.getElementById('confirmPassword').value = '';
-        
-        alert('✅ Password changed successfully!');
-      } catch (err) {
-        console.error('Password change error:', err);
-        alert('Failed to change password. Please try again.');
-      }
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
 
     // Hash password using Web Crypto API
@@ -693,106 +609,250 @@
       return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
-    // Export all data
-    function exportAllData() {
-      const data = {
-        shopName: window.shopData.shopName,
-        adminEmail: window.shopData.adminEmail,
-        momoNumber: window.shopData.momoNumber,
-        adminPassword: window.shopData.adminPassword,
-        inventory: window.shopData.inventory,
-        salesLog: window.shopData.salesLog,
-        cashiers: window.shopData.cashiers,
-        enableCash: window.shopData.enableCash,
-        enableMoMo: window.shopData.enableMoMo,
-        enableCard: window.shopData.enableCard,
-        defaultPayment: window.shopData.defaultPayment,
-        requireCustomerPhone: window.shopData.requireCustomerPhone
-      };
-      
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.setAttribute('hidden', '');
-      a.setAttribute('href', url);
-      a.setAttribute('download', 'jelvin-pos-backup.json');
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
+    if (!validateSession()) {
+      document.body.innerHTML = '<div style="text-align:center;padding:50px;font-size:1.5rem;color:red;">Session expired. Redirecting...</div>';
+      setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 2000);
+    } else {
+      // Initialize data AFTER validation
+      let cart = [];
+      let currentFilter = 'all';
+      let inventory = window.shopData.inventory || [];
+      let appliedDiscount = null;
 
-    // Import data
-    function importData() {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json';
-      input.onchange = e => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        const reader = new FileReader();
-        reader.onload = e => {
-          try {
-            const data = JSON.parse(e.target.result);
-            
-            // Confirm import
-            if (!confirm('This will replace all current data. Continue?')) return;
-            
-            // Restore data
-            if (data.shopName) window.shopData.shopName = data.shopName;
-            if (data.adminEmail) window.shopData.adminEmail = data.adminEmail;
-            if (data.momoNumber) window.shopData.momoNumber = data.momoNumber;
-            if (data.adminPassword) window.shopData.adminPassword = data.adminPassword;
-            if (data.inventory) window.shopData.inventory = data.inventory;
-            if (data.salesLog) window.shopData.salesLog = data.salesLog;
-            if (data.cashiers) window.shopData.cashiers = data.cashiers;
-            if (data.enableCash) window.shopData.enableCash = data.enableCash;
-            if (data.enableMoMo) window.shopData.enableMoMo = data.enableMoMo;
-            if (data.enableCard) window.shopData.enableCard = data.enableCard;
-            if (data.defaultPayment) window.shopData.defaultPayment = data.defaultPayment;
-            if (data.requireCustomerPhone) window.shopData.requireCustomerPhone = data.requireCustomerPhone;
-            
-            saveShopData();
-            alert('✅ Data imported successfully! Reloading...');
-            location.reload();
-          } catch (err) {
-            console.error('Import error:', err);
-            alert('Failed to import data. Invalid file format.');
-          }
+      // Live time (Accra)
+      function updateClock() {
+        const now = new Date();
+        const options = { 
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          timeZone: 'Africa/Accra'
         };
-        reader.readAsText(file);
-      };
-      input.click();
-    }
+        document.getElementById('liveTime').innerText = now.toLocaleString('en-GB', options);
+      }
+      setInterval(updateClock, 1000);
+      updateClock();
 
-    // Clear all data
-    function clearAllData() {
-      if (!confirm('⚠️ This will delete ALL data permanently!\n\nAre you sure you want to continue?')) return;
-      
-      // Clear only current shop data
-      localStorage.removeItem(window.currentShopId);
-      sessionStorage.clear();
-      alert('✅ All data cleared. Redirecting to setup...');
-      window.location.href = 'index.html';
-    }
+      const liveCartKey = window.currentUserEmail;
+      setInterval(() => {
+        updateLiveCart();
+      }, 10000);
 
-    // Save payment settings
-    function savePaymentSettings() {
-      window.shopData.enableCash = document.getElementById('enableCash').checked;
-      window.shopData.enableMoMo = document.getElementById('enableMoMo').checked;
-      window.shopData.enableCard = document.getElementById('enableCard').checked;
-      window.shopData.defaultPayment = document.getElementById('defaultPayment').value;
-      
-      // Save customer phone requirement
-      window.shopData.requireCustomerPhone = document.getElementById('requireCustomerPhone').checked ? 'true' : 'false';
-      
-      saveShopData();
-      
-      alert('✅ Payment settings saved successfully!');
-    }
+      function updateLiveCart() {
+        const liveCart = window.shopData.liveCart || {};
+        liveCart[liveCartKey] = {
+          cashier: window.currentUserEmail,
+          items: cart.map(item => ({
+            name: item.name,
+            qty: item.qty,
+            price: item.basePrice / (item.packSize || 1),
+            unit: item.unit
+          })),
+          total: calculateSubtotal(),
+          timestamp: new Date().toISOString()
+        };
+        window.shopData.liveCart = liveCart;
+        saveShopData();
+      }
 
-    // Initialize
-    loadSettings();
+      // Load settings
+      function loadSettings() {
+        document.getElementById('shopName').value = window.shopData.shopName || '';
+        document.getElementById('adminEmail').value = window.shopData.adminEmail || '';
+        document.getElementById('momoNumber').value = window.shopData.momoNumber || '';
+        document.getElementById('currencySymbol').value = window.shopData.currency || '₵';
+        
+        // Load payment settings
+        const enableCash = window.shopData.enableCash !== 'false';
+        const enableMoMo = window.shopData.enableMoMo !== 'false';
+        const enableCard = window.shopData.enableCard !== 'false';
+        const defaultPayment = window.shopData.defaultPayment || 'Cash';
+        
+        document.getElementById('enableCash').checked = enableCash;
+        document.getElementById('enableMoMo').checked = enableMoMo;
+        document.getElementById('enableCard').checked = enableCard;
+        document.getElementById('defaultPayment').value = defaultPayment;
+        
+        // Load customer phone requirement setting
+        const requirePhone = window.shopData.requireCustomerPhone === 'true';
+        document.getElementById('requireCustomerPhone').checked = requirePhone;
+      }
+
+      // Save settings
+      function saveSettings() {
+        const shopName = document.getElementById('shopName').value.trim();
+        const momoNumber = document.getElementById('momoNumber').value.trim();
+        const currency = document.getElementById('currencySymbol').value;
+        
+        if (!shopName) {
+          alert('Shop name is required!');
+          return;
+        }
+        
+        // Validate MoMo number (Ghana format)
+        if (momoNumber && !/^0(24|20|54|55|59|26|27|56|57)\d{7}$/.test(momoNumber)) {
+          alert('Please enter a valid Ghana MoMo number (e.g., 0241234567)');
+          return;
+        }
+        
+        window.shopData.shopName = shopName;
+        window.shopData.momoNumber = momoNumber;
+        window.shopData.currency = currency;
+        saveShopData();
+        
+        alert('✅ Settings saved successfully!');
+      }
+
+      // Change password
+      async function changePassword() {
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        
+        if (!currentPassword || !newPassword || !confirmPassword) {
+          alert('All password fields are required!');
+          return;
+        }
+        
+        if (newPassword.length < 8) {
+          alert('New password must be at least 8 characters!');
+          return;
+        }
+        
+        if (newPassword !== confirmPassword) {
+          alert('New passwords do not match!');
+          return;
+        }
+        
+        try {
+          // Verify current password
+          const adminPassword = window.shopData.adminPassword;
+          const currentHash = await hashPassword(currentPassword);
+          
+          if (currentHash !== adminPassword) {
+            alert('Current password is incorrect!');
+            return;
+          }
+          
+          // Hash new password
+          const newHash = await hashPassword(newPassword);
+          window.shopData.adminPassword = newHash;
+          saveShopData();
+          
+          // Clear password fields
+          document.getElementById('currentPassword').value = '';
+          document.getElementById('newPassword').value = '';
+          document.getElementById('confirmPassword').value = '';
+          
+          alert('✅ Password changed successfully!');
+        } catch (err) {
+          console.error('Password change error:', err);
+          alert('Failed to change password. Please try again.');
+        }
+      }
+
+      // Export all data
+      function exportAllData() {
+        const data = {
+          shopName: window.shopData.shopName,
+          adminEmail: window.shopData.adminEmail,
+          momoNumber: window.shopData.momoNumber,
+          adminPassword: window.shopData.adminPassword,
+          inventory: window.shopData.inventory,
+          salesLog: window.shopData.salesLog,
+          cashiers: window.shopData.cashiers,
+          enableCash: window.shopData.enableCash,
+          enableMoMo: window.shopData.enableMoMo,
+          enableCard: window.shopData.enableCard,
+          defaultPayment: window.shopData.defaultPayment,
+          requireCustomerPhone: window.shopData.requireCustomerPhone
+        };
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.setAttribute('hidden', '');
+        a.setAttribute('href', url);
+        a.setAttribute('download', 'jelvin-pos-backup.json');
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      // Import data
+      function importData() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = e => {
+          const file = e.target.files[0];
+          if (!file) return;
+          
+          const reader = new FileReader();
+          reader.onload = e => {
+            try {
+              const data = JSON.parse(e.target.result);
+              
+              // Confirm import
+              if (!confirm('This will replace all current data. Continue?')) return;
+              
+              // Restore data
+              if (data.shopName) window.shopData.shopName = data.shopName;
+              if (data.adminEmail) window.shopData.adminEmail = data.adminEmail;
+              if (data.momoNumber) window.shopData.momoNumber = data.momoNumber;
+              if (data.adminPassword) window.shopData.adminPassword = data.adminPassword;
+              if (data.inventory) window.shopData.inventory = data.inventory;
+              if (data.salesLog) window.shopData.salesLog = data.salesLog;
+              if (data.cashiers) window.shopData.cashiers = data.cashiers;
+              if (data.enableCash) window.shopData.enableCash = data.enableCash;
+              if (data.enableMoMo) window.shopData.enableMoMo = data.enableMoMo;
+              if (data.enableCard) window.shopData.enableCard = data.enableCard;
+              if (data.defaultPayment) window.shopData.defaultPayment = data.defaultPayment;
+              if (data.requireCustomerPhone) window.shopData.requireCustomerPhone = data.requireCustomerPhone;
+              
+              saveShopData();
+              alert('✅ Data imported successfully! Reloading...');
+              location.reload();
+            } catch (err) {
+              console.error('Import error:', err);
+              alert('Failed to import data. Invalid file format.');
+            }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      }
+
+      // Clear all data
+      function clearAllData() {
+        if (!confirm('⚠️ This will delete ALL data permanently!\n\nAre you sure you want to continue?')) return;
+        
+        // Clear only current shop data
+        localStorage.removeItem(window.currentShopId);
+        sessionStorage.clear();
+        alert('✅ All data cleared. Redirecting to setup...');
+        window.location.href = 'index.html';
+      }
+
+      // Save payment settings
+      function savePaymentSettings() {
+        window.shopData.enableCash = document.getElementById('enableCash').checked;
+        window.shopData.enableMoMo = document.getElementById('enableMoMo').checked;
+        window.shopData.enableCard = document.getElementById('enableCard').checked;
+        window.shopData.defaultPayment = document.getElementById('defaultPayment').value;
+        
+        // Save customer phone requirement
+        window.shopData.requireCustomerPhone = document.getElementById('requireCustomerPhone').checked ? 'true' : 'false';
+        
+        saveShopData();
+        
+        alert('✅ Payment settings saved successfully!');
+      }
+
+      // Initialize
+      loadSettings();
+    }
   </script>
 </body>
 </html>
