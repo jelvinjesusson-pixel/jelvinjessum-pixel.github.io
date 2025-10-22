@@ -851,7 +851,7 @@
           items: cart.map(item => ({
             name: item.name,
             qty: item.qty,
-            price: item.basePrice / (item.packSize || 1),
+            price: item.basePrice,
             unit: item.unit
           })),
           total: calculateSubtotal(),
@@ -873,8 +873,7 @@
             if (currentFilter === 'all') return matchesSearch && item.stock > 0;
             if (currentFilter === 'in') return matchesSearch && item.stock > 0;
             if (currentFilter === 'low') {
-              const totalUnits = item.unit === 'pcs' ? item.stock : (item.stock * (item.packSize || 1));
-              return matchesSearch && totalUnits > 0 && totalUnits < 5;
+              return matchesSearch && item.stock > 0 && item.stock < 5;
             }
             return matchesSearch && item.stock > 0;
           } catch (e) {
@@ -889,15 +888,13 @@
         resultsDiv.innerHTML = filtered.map((item, index) => {
           try {
             const actualIndex = inventory.findIndex(i => i.name === item.name && i.unit === item.unit);
-            const totalUnits = item.unit === 'pcs' ? item.stock : (item.stock * (item.packSize || 1));
-            const isLow = totalUnits < 5;
-            const stockDisplay = item.unit === 'pcs' ? `${item.stock} pcs` : `${item.stock} ${item.unit}`;
-            const costPerUnit = item.costPrice / (item.packSize || 1);
-            const profitMargin = ((item.price - costPerUnit) / costPerUnit * 100).toFixed(1);
+            const isLow = item.stock < 5;
+            const stockDisplay = `${item.stock} ${item.unit}${item.stock > 1 ? 's' : ''}`;
+            const profitMargin = ((item.price - item.costPrice) / item.costPrice * 100).toFixed(1);
             return `
               <div class="search-result" onclick="showUnitSelector(${actualIndex})">
                 <div class="result-name">${escapeHtml(item.name)}</div>
-                <div class="result-price">${getCurrencySymbol()}${item.price.toFixed(2)} /unit</div>
+                <div class="result-price">${getCurrencySymbol()}${item.price.toFixed(2)} /${item.unit}</div>
                 <div class="result-details">
                   <div class="detail-item">
                     <div class="detail-label">Stock</div>
@@ -905,7 +902,7 @@
                   </div>
                   <div class="detail-item">
                     <div class="detail-label">Cost</div>
-                    <div class="detail-value">${getCurrencySymbol()}${costPerUnit.toFixed(2)}</div>
+                    <div class="detail-value">${getCurrencySymbol()}${item.costPrice.toFixed(2)}</div>
                   </div>
                   <div class="detail-item">
                     <div class="detail-label">Profit</div>
@@ -927,13 +924,7 @@
       function showUnitSelector(index) {
         const item = inventory[index];
         if (!item) return;
-        let availableUnits = 0;
-        if (item.unit === 'pcs') {
-          availableUnits = item.stock;
-        } else {
-          availableUnits = item.stock * (item.packSize || 1);
-        }
-        if (availableUnits <= 0) {
+        if (item.stock <= 0) {
           return;
         }
         const unitSelector = document.createElement('div');
@@ -970,11 +961,9 @@
           options.push({ label: 'Per Carton', value: 'carton', multiplier: 1 });
         }
         if (item.unit === 'pack') {
-          options.push({ label: 'Per Pack', value: 'pack', multiplier: item.packSize || 1 });
-          options.push({ label: 'Per Item', value: 'item', multiplier: 1 });
+          options.push({ label: 'Per Pack', value: 'pack', multiplier: 1 });
         } else if (item.unit === 'dozen') {
-          options.push({ label: 'Per Dozen', value: 'dozen', multiplier: item.packSize || 12 });
-          options.push({ label: 'Per Item', value: 'item', multiplier: 1 });
+          options.push({ label: 'Per Dozen', value: 'dozen', multiplier: 1 });
         }
         return options;
       }
@@ -1021,8 +1010,8 @@
       function calculateSubtotal() {
         let subtotal = 0;
         cart.forEach(item => {
-          const pricePerUnit = item.basePrice / (item.packSize || 1);
-          subtotal += pricePerUnit * item.qty * item.multiplier;
+          const pricePerUnit = item.basePrice;
+          subtotal += pricePerUnit * item.qty;
         });
         return subtotal;
       }
@@ -1069,8 +1058,7 @@
           return;
         }
         cart.forEach((item, i) => {
-          const pricePerUnit = item.basePrice / (item.packSize || 1);
-          const totalPrice = pricePerUnit * item.qty * item.multiplier;
+          const totalPrice = item.basePrice * item.qty;
           const div = document.createElement('div');
           div.className = 'cart-item';
           div.innerHTML = `
@@ -1090,7 +1078,7 @@
               </div>
               <div class="detail-row">
                 <span class="detail-label">Unit Price:</span>
-                <span class="detail-value">${getCurrencySymbol()}${pricePerUnit.toFixed(2)}</span>
+                <span class="detail-value">${getCurrencySymbol()}${item.basePrice.toFixed(2)}</span>
               </div>
             </div>
             <button class="remove-btn" onclick="removeItem(${i})">×</button>
@@ -1129,17 +1117,16 @@
       }
       function logSaleToReports(cart, total, paymentMethod, discountInfo = null, customerPhone = '') {
         const saleItems = cart.map(item => {
-          const costPerUnit = item.costPrice / (item.packSize || 1);
           return {
             name: item.name,
             qty: item.qty,
-            price: item.basePrice / (item.packSize || 1),
-            cost: costPerUnit,
-            total: (item.basePrice / (item.packSize || 1)) * item.qty * item.multiplier
+            price: item.basePrice,
+            cost: item.costPrice,
+            total: item.basePrice * item.qty
           };
         });
         const subtotal = saleItems.reduce((sum, item) => sum + item.total, 0);
-        const totalCost = saleItems.reduce((sum, item) => sum + (item.cost * item.qty * item.multiplier), 0);
+        const totalCost = saleItems.reduce((sum, item) => sum + (item.cost * item.qty), 0);
         const discountAmount = discountInfo ? discountInfo.amount : 0;
         const saleRecord = {
           date: new Date().toISOString(),
@@ -1185,17 +1172,14 @@ Click OK after approval.`)) return;
           const invItem = inventory.find(p => p.name === cartItem.name);
           if (!invItem) continue;
           let unitsToDeduct = 0;
-          if (cartItem.unit === 'item') {
-            // Selling individual items: deduct 1 per qty
+          if (['pack', 'dozen', 'bag', 'carton'].includes(cartItem.unit)) {
+            // Selling packs: deduct 1 pack per qty
             unitsToDeduct = cartItem.qty;
-          } else if (['pack', 'dozen', 'bag', 'carton'].includes(cartItem.unit)) {
-            // Selling packs: deduct packSize * qty
-            unitsToDeduct = cartItem.qty * (invItem.packSize || 1);
           } else {
             // Selling pcs, bottle, can, kg, etc.: 1 = 1
             unitsToDeduct = cartItem.qty;
           }
-          // Always deduct from the total individual units stored in `stock`
+          // Deduct from the number of units (packs/dozens/pcs)
           invItem.stock = Math.max(0, invItem.stock - unitsToDeduct);
         }
         window.shopData.inventory = inventory;
@@ -1230,9 +1214,8 @@ Click OK after approval.`)) return;
         lines.push(centerText(now, 40));
         lines.push('='.repeat(40));
         cart.forEach(item => {
-          const pricePerUnit = item.basePrice / (item.packSize || 1);
-          const totalPrice = pricePerUnit * item.qty * item.multiplier;
-          const desc = `${item.qty} ${item.unit} @ ${currency}${pricePerUnit.toFixed(2)}`;
+          const totalPrice = item.basePrice * item.qty;
+          const desc = `${item.qty} ${item.unit} @ ${currency}${item.basePrice.toFixed(2)}`;
           const itemName = item.name.length > 25 ? item.name.substring(0, 24) + '…' : item.name;
           const priceStr = `${currency}${totalPrice.toFixed(2)}`;
           const line = itemName.padEnd(30) + priceStr.padStart(10);
